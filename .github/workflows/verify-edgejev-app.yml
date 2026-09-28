@@ -1,0 +1,127 @@
+name: Verify EdgeJev ABP app
+
+on:
+  push:
+    branches: [edgejev-app]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install edgejev==0.3.2
+          npm install --omit=dev
+
+      - name: Download verified multilingual INT8 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: edgejev-laya-multilingual-int8
+          path: ./jev-int8
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36422056284
+
+      - name: Verify model files
+        run: |
+          test -f jev-int8/model.onnx
+          test -f jev-int8/tokenizer.json
+          test -f jev-int8/edgejev.json
+          ls -lh jev-int8
+
+      - name: Start EdgeJev and smoke test protocol
+        run: |
+          edgejev serve --model ./jev-int8 --host 127.0.0.1 --port 8009 > /tmp/edgejev.log 2>&1 &
+          echo $! > /tmp/edgejev.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8009/health > /tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/health.json
+          python - <<'PY'
+          import json, urllib.request
+          body = json.dumps({
+              "state": "我十分钟后要出门，但报告还没发给老师。",
+              "questions": {
+                  "next": {
+                      "type": "choice",
+                      "instructions": "下一步怎么处理？",
+                      "criteria": {
+                          "act_now": "现在执行",
+                          "later": "稍后处理"
+                      }
+                  }
+              }
+          }, ensure_ascii=False).encode()
+          req = urllib.request.Request(
+              "http://127.0.0.1:8009/v1/systemone",
+              data=body,
+              headers={"content-type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=10) as r:
+              out = json.load(r)
+          assert "answers" in out and "next" in out["answers"], out
+          print(json.dumps(out, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Start Node shell and smoke test ABP endpoint
+        env:
+          PORT: "8080"
+          EDGEJEV_PORT: "8009"
+        run: |
+          node index.js > /tmp/node.log 2>&1 &
+          echo $! > /tmp/node.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/api/edgejev/health > /tmp/node-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/node-health.json
+          curl -fsS             -H 'content-type: application/json'             -d '{"text":"我十分钟后要出门，但报告还没发给老师。"}'             http://127.0.0.1:8080/api/abp/decide > /tmp/abp.json
+          cat /tmp/abp.json
+          python - <<'PY'
+          import json
+          with open("/tmp/abp.json", encoding="utf-8") as f:
+              out = json.load(f)
+          assert out["protocol"] == "abp/0.1", out
+          directive = out.get("directive") or {}
+          assert directive.get("protocol") == "human-mcp/0.1", out
+          assert directive.get("next_step") in {"act_now", "clarify", "schedule", "no_action"}, out
+          assert directive.get("work_mode") in {
+              "study", "admin", "communication", "research", "coding", "personal", "other"
+          }, out
+          print("ABP smoke test passed")
+          PY
+
+      - name: Verify container image builds
+        run: docker build -t brucewechatxiao-edgejev:test .
+
+      - name: Print logs on failure
+        if: failure()
+        run: |
+          echo "=== EdgeJev ==="
+          cat /tmp/edgejev.log || true
+          echo "=== Node ==="
+          cat /tmp/node.log || true
