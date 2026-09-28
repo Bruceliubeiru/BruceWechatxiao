@@ -20,7 +20,7 @@ jobs:
       - name: Install EdgeJev builder
         run: |
           python -m pip install --upgrade pip
-          pip install "edgejev[build]"
+          pip install "edgejev[build]" onnxscript
 
       - name: Build multilingual INT8 model
         env:
