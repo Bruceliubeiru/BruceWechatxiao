@@ -110,6 +110,8 @@ console.log(JSON.stringify({
   }
 }, null, 2));
 
+console.log(JSON.stringify({ jsAnswers: jsResult.answers, pyAnswers: pyResult.answers }, null, 2));
+
 function close(a, b, eps = 2e-4) {
   return Math.abs(Number(a) - Number(b)) <= eps;
 }
