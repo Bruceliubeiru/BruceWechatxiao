@@ -10,9 +10,11 @@ COPY package*.json /app/
 RUN npm config set registry https://registry.npmmirror.com \
   && npm install --omit=dev
 
+# The current model artifact was built with EdgeJev 0.3.2 from PyPI.
+# Pin runtime to the same published version so deploys remain reproducible.
 RUN python3 -m venv /opt/edgejev-venv \
   && /opt/edgejev-venv/bin/pip install --no-cache-dir --upgrade pip \
-  && /opt/edgejev-venv/bin/pip install --no-cache-dir edgejev==0.4.0
+  && /opt/edgejev-venv/bin/pip install --no-cache-dir edgejev==0.3.2
 
 ENV PATH="/opt/edgejev-venv/bin:$PATH"
 ENV EDGEJEV_MODEL_DIR="/models/jev-int8"
