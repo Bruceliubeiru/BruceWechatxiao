@@ -63,8 +63,13 @@ const pyCode = [
   "from edgejev import Agent",
   "ag = Agent(os.environ['EDGEJEV_MODEL_DIR'])",
   "questions = json.loads(os.environ['ABP_QUESTIONS_JSON'])",
+  "from edgejev.core.render import to_internal",
+  "qids = list(questions.keys())",
+  "qs = [to_internal(questions[q]) for q in qids]",
+  "prep = ag.spec.prepare(ag.enc, os.environ['ABP_STATE'], qs, ag.cfg)",
   "out = ag.system_one(os.environ['ABP_STATE'], questions)",
-  "print(json.dumps(out, ensure_ascii=False))"
+  "diag = {'input_ids_row0': prep.feed['input_ids'][0].tolist(), 'attention_row0': prep.feed['attention_mask'][0].tolist(), 'marker_pos': prep.feed['marker_pos'].tolist(), 'marker_mask': prep.feed['marker_mask'].astype(int).tolist(), 'qtype': prep.feed['qtype'].tolist(), 'k': prep.k}",
+  "print(json.dumps({'result': out, 'diag': diag}, ensure_ascii=False))"
 ].join("\n");
 
 const py = spawnSync("python", ["-c", pyCode], {
@@ -82,7 +87,28 @@ if (py.status !== 0) {
   process.exit(py.status || 1);
 }
 const pyLines = py.stdout.trim().split(/\n/).filter(Boolean);
-const pyResult = JSON.parse(pyLines[pyLines.length - 1]);
+const pyPayload = JSON.parse(pyLines[pyLines.length - 1]);
+const pyResult = pyPayload.result;
+const pyDiag = pyPayload.diag;
+
+const jsRow0 = prep.feed.input_ids[0];
+let firstTokenDiff = -1;
+for (let i = 0; i < Math.max(jsRow0.length, pyDiag.input_ids_row0.length); i++) {
+  if (jsRow0[i] !== pyDiag.input_ids_row0[i]) { firstTokenDiff = i; break; }
+}
+console.log(JSON.stringify({
+  preprocessing: {
+    jsRow0Length: jsRow0.length,
+    pyRow0Length: pyDiag.input_ids_row0.length,
+    firstTokenDiff,
+    jsAroundDiff: firstTokenDiff >= 0 ? jsRow0.slice(Math.max(0, firstTokenDiff - 10), firstTokenDiff + 20) : [],
+    pyAroundDiff: firstTokenDiff >= 0 ? pyDiag.input_ids_row0.slice(Math.max(0, firstTokenDiff - 10), firstTokenDiff + 20) : [],
+    jsMarkers: prep.feed.marker_pos,
+    pyMarkers: pyDiag.marker_pos,
+    jsK: prep.k,
+    pyK: pyDiag.k
+  }
+}, null, 2));
 
 function close(a, b, eps = 2e-4) {
   return Math.abs(Number(a) - Number(b)) <= eps;
