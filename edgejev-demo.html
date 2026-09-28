@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EdgeJev Local Decision Demo</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;max-width:760px;margin:40px auto;padding:0 18px;line-height:1.55}
+textarea{width:100%;min-height:130px;padding:12px;box-sizing:border-box}
+button{margin-top:12px;padding:10px 18px}
+pre{background:#f5f5f5;padding:14px;overflow:auto;white-space:pre-wrap}
+small{color:#666}
+</style>
+</head>
+<body>
+<h1>EdgeJev 本地决策</h1>
+<p>输入一条消息。模型只做结构化判断，不生成聊天文本。</p>
+<textarea id="text">我的订单被扣了两次款，今天必须处理，麻烦尽快退款。</textarea>
+<br><button id="run">运行模型</button>
+<p><small id="status"></small></p>
+<pre id="out">等待运行</pre>
+<script>
+const out=document.getElementById('out'), status=document.getElementById('status');
+async function health(){
+  try{
+    const r=await fetch('/api/edgejev/health'); const j=await r.json();
+    status.textContent=j.ok?'模型已就绪':'模型未就绪：'+(j.error||'unknown');
+  }catch(e){status.textContent='无法连接模型服务';}
+}
+document.getElementById('run').onclick=async()=>{
+  out.textContent='运行中…';
+  try{
+    const r=await fetch('/api/edgejev/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:document.getElementById('text').value})});
+    const j=await r.json(); out.textContent=JSON.stringify(j,null,2);
+  }catch(e){out.textContent=String(e);}
+};
+health();
+</script>
+</body>
+</html>
