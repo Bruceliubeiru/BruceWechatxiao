@@ -1,0 +1,52 @@
+name: Verify Offline EdgeJev JS Core
+
+on:
+  push:
+    branches: [offline-apk]
+    paths:
+      - "offline-web/**"
+      - ".github/workflows/verify-offline-js.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python reference runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install edgejev==0.3.2
+
+      - name: Install JavaScript runtime
+        working-directory: offline-web
+        run: npm install
+
+      - name: Download verified multilingual INT8 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: edgejev-laya-multilingual-int8
+          path: ./jev-int8
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36422056284
+
+      - name: Run exact parity check
+        env:
+          EDGEJEV_MODEL_DIR: ../jev-int8
+        working-directory: offline-web
+        run: node test-parity.mjs
