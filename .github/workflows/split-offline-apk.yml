@@ -1,0 +1,71 @@
+name: Split Offline APK for Delivery
+
+on:
+  push:
+    branches: [offline-apk]
+    paths:
+      - ".github/workflows/split-offline-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: prescript-edgejev-offline-arm64
+          path: ./apk
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 36432632555
+
+      - name: Split APK into transport chunks
+        run: |
+          test -f apk/app-debug.apk
+          sha256sum apk/app-debug.apk | tee apk/original.sha256
+          split -b 70M apk/app-debug.apk apk/apk.part.
+          ls -lh apk/apk.part.*
+          test -f apk/apk.part.aa
+          test -f apk/apk.part.ab
+          test -f apk/apk.part.ac
+          test -f apk/apk.part.ad
+          test -f apk/apk.part.ae
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-part-aa
+          path: apk/apk.part.aa
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-part-ab
+          path: apk/apk.part.ab
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-part-ac
+          path: apk/apk.part.ac
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-part-ad
+          path: apk/apk.part.ad
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-part-ae
+          path: apk/apk.part.ae
+          retention-days: 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-sha256
+          path: apk/original.sha256
+          retention-days: 2
