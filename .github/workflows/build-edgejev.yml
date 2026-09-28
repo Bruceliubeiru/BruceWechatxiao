@@ -1,13 +1,13 @@
 name: Build EdgeJev multilingual INT8
 
 on:
-  push:
-    paths:
-      - ".github/workflows/build-edgejev.yml"
   workflow_dispatch:
+  issues:
+    types: [opened]
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.issue.title == '[edgejev-build-trigger]'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
