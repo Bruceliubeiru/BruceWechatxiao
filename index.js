@@ -5,6 +5,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 const { init: initDB, Counter } = require("./db");
 const { DEFAULT_QUESTIONS } = require("./edgejev-defaults");
+const { ABP_QUESTIONS, toHumanMcp } = require("./abp-defaults");
 
 const logger = morgan("tiny");
 const app = express();
@@ -14,6 +15,7 @@ app.use(cors());
 app.use(logger);
 
 const EDGEJEV_PORT = Number(process.env.EDGEJEV_PORT || 8009);
+let dbReady = false;
 
 function edgejevRequest(method, pathname, body) {
   return new Promise((resolve, reject) => {
@@ -63,6 +65,13 @@ app.get("/api/edgejev/health", async (req, res) => {
   }
 });
 
+async function runDecision(text, questions) {
+  return edgejevRequest("POST", "/v1/systemone", {
+    state: text,
+    questions,
+  });
+}
+
 app.post("/api/edgejev/decide", async (req, res) => {
   const text = typeof req.body.text === "string" ? req.body.text.trim() : "";
   if (!text) return res.status(400).send({ error: "text is required" });
@@ -72,10 +81,7 @@ app.post("/api/edgejev/decide", async (req, res) => {
     : DEFAULT_QUESTIONS;
 
   try {
-    const r = await edgejevRequest("POST", "/v1/systemone", {
-      state: text,
-      questions,
-    });
+    const r = await runDecision(text, questions);
     res.status(r.status).send(r.data);
   } catch (e) {
     res.status(503).send({
@@ -85,8 +91,44 @@ app.post("/api/edgejev/decide", async (req, res) => {
   }
 });
 
-// Existing template APIs kept intact.
+// ABP is a policy layer over EdgeJev. It produces a typed Human-MCP directive;
+// it does not pretend the classifier can generate natural-language plans.
+app.post("/api/abp/decide", async (req, res) => {
+  const text = typeof req.body.text === "string" ? req.body.text.trim() : "";
+  if (!text) return res.status(400).send({ error: "text is required" });
+
+  try {
+    const r = await runDecision(text, ABP_QUESTIONS);
+    if (r.status < 200 || r.status >= 300) {
+      return res.status(r.status).send(r.data);
+    }
+    res.send({
+      protocol: "abp/0.1",
+      input: text,
+      directive: toHumanMcp(r.data),
+      decision: r.data,
+    });
+  } catch (e) {
+    res.status(503).send({
+      error: "ABP decision service unavailable",
+      detail: String(e.message || e),
+    });
+  }
+});
+
+// Existing template APIs remain available when MySQL is configured.
+function requireDB(res) {
+  if (dbReady) return true;
+  res.status(503).send({
+    code: 503,
+    error: "database unavailable",
+    detail: "Set MYSQL_ADDRESS / MYSQL_USERNAME / MYSQL_PASSWORD to enable counter APIs.",
+  });
+  return false;
+}
+
 app.post("/api/count", async (req, res) => {
+  if (!requireDB(res)) return;
   const { action } = req.body;
   if (action === "inc") {
     await Counter.create();
@@ -97,6 +139,7 @@ app.post("/api/count", async (req, res) => {
 });
 
 app.get("/api/count", async (req, res) => {
+  if (!requireDB(res)) return;
   res.send({ code: 0, data: await Counter.count() });
 });
 
@@ -111,7 +154,18 @@ app.get("/api/wx_openid", async (req, res) => {
 const port = process.env.PORT || 80;
 
 async function bootstrap() {
-  await initDB();
+  if (process.env.MYSQL_ADDRESS) {
+    try {
+      await initDB();
+      dbReady = true;
+      console.log("[db] ready");
+    } catch (e) {
+      console.error("[db] init failed; non-DB endpoints will remain available", e);
+    }
+  } else {
+    console.log("[db] MYSQL_ADDRESS not set; starting without counter database");
+  }
+
   app.listen(port, () => {
     console.log("启动成功", port);
   });
