@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'">
+  <title>食指终端 · OFFLINE</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scan"></div>
+  <main class="shell">
+    <header><div><div class="eyebrow">THE INDEX / LOCAL HUMAN-MCP</div><h1>食指终端</h1></div><div id="status" class="status">INIT</div></header>
+    <section class="card input-card">
+      <div class="label">向指令问询</div>
+      <textarea id="input" maxlength="600" placeholder="把你现在脑子里占位置的事情直接丢进来，不用整理。"></textarea>
+      <div class="count"><span id="count">0</span> / 600</div>
+      <button id="run">[ 接收指令 ]</button><div id="error" class="error" hidden></div>
+    </section>
+    <section class="card result" id="result" hidden>
+      <div class="meta"><span>当前指令</span><span id="mode"></span></div>
+      <p id="command"></p>
+      <div class="metrics"><span id="next"></span><span id="urgency"></span><span id="effort"></span></div>
+      <div id="confirm" class="confirm" hidden>涉及外部绑定动作。先确认对象、内容和后果，再由你手动执行。</div>
+    </section>
+    <section class="card"><div class="label">最近指令</div><div id="history" class="history"></div></section>
+    <footer>MODEL: LAYA MULTILINGUAL INT8 · RUNTIME: ONNX · NETWORK: NONE</footer>
+  </main>
+  <script src="offline-agent.js"></script><script src="ui.js"></script>
+</body></html>
