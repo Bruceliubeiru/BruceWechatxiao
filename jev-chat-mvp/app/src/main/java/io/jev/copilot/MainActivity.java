@@ -163,15 +163,26 @@ public final class MainActivity extends Activity {
         if (clip != null) for (int i = 0; i < clip.getItemCount(); i++) {
             Uri uri = clip.getItemAt(i).getUri(); if (uri != null) incoming.add(uri);
         }
-        if (Build.VERSION.SDK_INT >= 33) {
-            Uri single = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
+        // SEND_MULTIPLE stores EXTRA_STREAM as a list; do not cast it to a single Uri.
+        // Type-specific branches prevent ClassCastException on Android 8–12.
+        if (Intent.ACTION_SEND.equals(action)) {
+            Uri single;
+            if (Build.VERSION.SDK_INT >= 33) {
+                single = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
+            } else {
+                @SuppressWarnings("deprecation") Uri legacy = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                single = legacy;
+            }
             if (single != null) incoming.add(single);
-            ArrayList<Uri> multiple = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri.class);
-            if (multiple != null) incoming.addAll(multiple);
         } else {
-            @SuppressWarnings("deprecation") Uri single = intent.getParcelableExtra(Intent.EXTRA_STREAM);
-            if (single != null) incoming.add(single);
-            @SuppressWarnings("deprecation") ArrayList<Uri> multiple = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            ArrayList<Uri> multiple;
+            if (Build.VERSION.SDK_INT >= 33) {
+                multiple = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri.class);
+            } else {
+                @SuppressWarnings("deprecation") ArrayList<Uri> legacy =
+                        intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                multiple = legacy;
+            }
             if (multiple != null) incoming.addAll(multiple);
         }
         for (Uri uri : incoming) if ("content".equals(uri.getScheme()) || "file".equals(uri.getScheme())) queued.add(uri);
